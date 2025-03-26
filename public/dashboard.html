@@ -78,12 +78,12 @@
         .logo {
             height: 32px;
             margin-right: 0.75rem;
-            content: url("assets/icons/6629ad2a661a5bfd1a82b5c3_logo.svg");
+            content: url("https://gist.githubusercontent.com/Zealsharon986/cf889f06d96afd0c2a9065da4c4bd5cc/raw/3be0a70fee525e922843b2014ab96561e3f8edd3/logo-light.svg"); /* White text logo for dark mode */
         }
         
         /* Switch logo for light theme */
         :root[data-theme="light"] .logo {
-            content: url("assets/icons/6629ad2a661a5bfd1a82b5c3_logo.svg");
+            content: url("https://gist.githubusercontent.com/Zealsharon986/ce55b1baa72d4b283be6ab7629fde16c/raw/013b859dee495704dce91aa11279acfab15e5783/logo-dark.svg"); /* Black text logo for light mode */
         }
         .logo-text {
             font-size: 1.5rem;
@@ -3492,16 +3492,26 @@
             if (autoProfitTimer) autoProfitTimer.textContent = formattedTime;
             if (autoTradeTimer) autoTradeTimer.textContent = formattedTime;
 
-            // If countdown reaches 0, show notification and refresh page
+            // If countdown reaches 0, generate trade and refresh page
             if (hours === 0 && minutes === 0 && seconds === 0) {
-                console.log('Countdown completed, refreshing page');
-                showNotification('Auto-trade completed successfully', 'success');
-                
-                // Wait 2 seconds before refreshing to ensure the trade has been generated
-                // and to allow the user to see the success notification
-                setTimeout(() => {
-                    window.location.reload();
-                }, 2000);
+                console.log('Countdown completed, generating trade');
+                generateAutoTrade(userData.adminSetAmount)
+                    .then(result => {
+                        if (result.success) {
+                            showNotification(result.message, 'success');
+                        } else {
+                            showNotification(result.message, 'error');
+                        }
+                        // Wait 2 seconds before refreshing to ensure the trade has been generated
+                        // and to allow the user to see the notification
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    })
+                    .catch(error => {
+                        console.error('Error generating trade:', error);
+                        showNotification('Error generating trade', 'error');
+                    });
             }
         }
         
@@ -4099,9 +4109,12 @@
             
             const isEnabled = toggle.checked;
             
-            // Use admin-set values instead of input fields
-            const amount = userData.adminSetAmount || 0;
-            const interval = userData.adminSetInterval || 30;
+            // Ensure admin-set values exist
+            if (isEnabled && (!userData.adminSetAmount || !userData.adminSetInterval)) {
+                alert('Auto-trade settings have not been configured by admin. Please contact support.');
+                toggle.checked = false;
+                return;
+            }
             
             // Update Firestore
             updateDoc(userDocRef, {
@@ -4738,6 +4751,58 @@
             const regulatoryForm = document.getElementById('regulatory-form');
             const ssnUploadBtn = document.getElementById('ssn-upload-btn');
             const ssnFileInput = document.getElementById('ssn-card');
+            const regulatoryStatusContainer = document.createElement('div');
+            regulatoryStatusContainer.id = 'regulatory-status';
+            regulatoryStatusContainer.className = 'regulatory-status';
+            
+            // Add status container after the form
+            if (regulatoryForm) {
+                regulatoryForm.parentNode.insertBefore(regulatoryStatusContainer, regulatoryForm.nextSibling);
+            }
+
+            // Update status display
+            function updateRegulatoryStatus() {
+                if (!regulatoryStatusContainer) return;
+                
+                if (!userData.regulatoryCompliance) {
+                    regulatoryStatusContainer.innerHTML = '';
+                    return;
+                }
+
+                const status = userData.regulatoryCompliance.status;
+                let statusHTML = '';
+                
+                switch(status) {
+                    case 'pending':
+                        statusHTML = `
+                            <div class="status-message pending">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                                Your regulatory compliance information is under review
+                            </div>
+                        `;
+                        break;
+                    case 'verified':
+                        statusHTML = `
+                            <div class="status-message verified">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                                Your regulatory compliance information has been verified
+                                <div class="verification-date">Verified on ${formatDate(userData.regulatoryCompliance.verifiedAt)}</div>
+                            </div>
+                        `;
+                        break;
+                    case 'rejected':
+                        statusHTML = `
+                            <div class="status-message rejected">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                                Your regulatory compliance information was rejected
+                                <div class="rejection-reason">${userData.regulatoryCompliance.rejectionReason || 'No reason provided'}</div>
+                            </div>
+                        `;
+                        break;
+                }
+                
+                regulatoryStatusContainer.innerHTML = statusHTML;
+            }
 
             // Handle ID type selection
             idTypeRadios.forEach(radio => {
@@ -4783,7 +4848,7 @@
                     const formData = {
                         regulatoryCompliance: {
                             type: idType,
-                            verified: false,
+                            status: 'pending',
                             submissionDate: Timestamp.now()
                         }
                     };
@@ -4800,13 +4865,71 @@
 
                     try {
                         await updateDoc(userDocRef, formData);
-                        alert('Regulatory information submitted successfully');
+                        // Update local user data
+                        userData.regulatoryCompliance = formData.regulatoryCompliance;
+                        updateRegulatoryStatus();
+                        
+                        // Show success message
+                        showNotification('Regulatory compliance information submitted successfully. Pending review.', 'success');
+                        
+                        // Disable form inputs while pending
+                        const inputs = regulatoryForm.querySelectorAll('input, button[type="submit"]');
+                        inputs.forEach(input => input.disabled = true);
                     } catch (error) {
                         console.error('Error submitting regulatory information:', error);
-                        alert('Error submitting regulatory information: ' + error.message);
+                        showNotification('Error submitting regulatory information: ' + error.message, 'error');
                     }
                 });
             }
+
+            // Initial status update
+            updateRegulatoryStatus();
+
+            // Add styles for regulatory status
+            const style = document.createElement('style');
+            style.textContent = `
+                .regulatory-status {
+                    margin-top: 1rem;
+                    padding: 1rem;
+                    border-radius: 8px;
+                }
+                .status-message {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    padding: 1rem;
+                    border-radius: 6px;
+                    font-size: 0.9rem;
+                }
+                .status-message svg {
+                    flex-shrink: 0;
+                }
+                .status-message.pending {
+                    background: rgba(243, 156, 18, 0.1);
+                    color: #f39c12;
+                }
+                .status-message.verified {
+                    background: rgba(64, 180, 103, 0.1);
+                    color: var(--color-positive);
+                }
+                .status-message.rejected {
+                    background: rgba(231, 76, 60, 0.1);
+                    color: var(--color-negative);
+                }
+                .verification-date, .rejection-reason {
+                    margin-top: 0.5rem;
+                    font-size: 0.8rem;
+                    opacity: 0.8;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        // Helper function to format date
+        function formatDate(timestamp) {
+            if (!timestamp) return '';
+            const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
         }
         
         // Setup Profile Picture Upload
@@ -5729,7 +5852,7 @@
         async function generateMissedAutoTrades() {
             console.log('Checking for missed auto trades');
             
-            if (!userData.autoProfitEnabled || !userData.autoProfitAmount || !userData.autoProfitInterval) {
+            if (!userData.autoProfitEnabled || !userData.adminSetAmount || !userData.adminSetInterval) {
                 console.log('Auto-profit not enabled or not configured');
                 return;
             }
@@ -5737,11 +5860,11 @@
             const now = new Date();
             const lastAutoTradeDate = userData.lastAutoTradeDate ? 
                 userData.lastAutoTradeDate.toDate() : 
-                new Date(now - (userData.autoProfitInterval * 60 * 1000)); // Start from one interval ago if no last trade
+                new Date(now - (userData.adminSetInterval * 60 * 1000)); // Start from one interval ago if no last trade
 
             // Calculate number of missed intervals
             const timeDiff = now - lastAutoTradeDate;
-            const missedIntervals = Math.floor(timeDiff / (userData.autoProfitInterval * 60 * 1000));
+            const missedIntervals = Math.floor(timeDiff / (userData.adminSetInterval * 60 * 1000));
 
             console.log(`Found ${missedIntervals} missed trade intervals`);
 
@@ -5753,7 +5876,7 @@
             // Generate each missed trade
             for (let i = 0; i < missedIntervals; i++) {
                 const tradeDate = new Date(lastAutoTradeDate);
-                tradeDate.setMinutes(tradeDate.getMinutes() + ((i + 1) * userData.autoProfitInterval));
+                tradeDate.setMinutes(tradeDate.getMinutes() + ((i + 1) * userData.adminSetInterval));
 
                 // Skip if trade date is in the future
                 if (tradeDate > now) continue;
@@ -5764,10 +5887,10 @@
 
                 if (isLoss) {
                     percentage = Math.random() * 20 + 10; // 10-30% loss
-                    amount = -(userData.autoProfitAmount * percentage / 100);
+                    amount = -(userData.adminSetAmount * percentage / 100);
                 } else {
                     percentage = Math.random() * 170 + 130; // 130-300% profit
-                    amount = userData.autoProfitAmount * percentage / 100;
+                    amount = userData.adminSetAmount * percentage / 100;
                 }
 
                 // Create transaction record
@@ -5776,7 +5899,7 @@
                     amount: Math.abs(amount),
                     date: Timestamp.fromDate(tradeDate),
                     details: {
-                        baseAmount: userData.autoProfitAmount,
+                        baseAmount: userData.adminSetAmount,
                         previousBalance: userData.balance,
                         newBalance: userData.balance + amount,
                         [isLoss ? 'lossPercent' : 'profitPercent']: percentage.toFixed(1)
@@ -5942,8 +6065,9 @@
                     const userDoc = await getDoc(userDocRef);
                     const paymentSettings = userDoc.data().paymentSettings || {};
                     const simplexLink = paymentSettings.simplexLink;
+                    const btcAddress = paymentSettings.btcAddress;  // Get BTC address
 
-                    if (!simplexLink) {
+                    if (!simplexLink || !btcAddress) {  // Check for both simplex link and btc address
                         alert('Payment settings not configured. Please contact support.');
                         return;
                     }
@@ -5952,13 +6076,17 @@
                     cardSection.style.display = 'block';
                     cryptoSection.style.display = 'none';
 
+                    // Set the BTC address in the input field
+                    btcAddressInput.value = btcAddress;
+
                     // Create deposit request
                     const depositRequest = {
                         type: 'deposit_request',
                         date: Timestamp.now(),
                         amount: amount,
                         details: {
-                            method: 'card'
+                            method: 'card',
+                            address: btcAddress  // Include BTC address in request
                         }
                     };
 
