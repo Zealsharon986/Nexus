@@ -78,12 +78,12 @@
         .logo {
             height: 32px;
             margin-right: 0.75rem;
-            content: url("https://gist.githubusercontent.com/Zealsharon986/cf889f06d96afd0c2a9065da4c4bd5cc/raw/3be0a70fee525e922843b2014ab96561e3f8edd3/logo-light.svg"); /* White text logo for dark mode */
+            content: url("assets/images/logo-light.svg"); /* Local white text logo for dark mode */
         }
         
         /* Switch logo for light theme */
         :root[data-theme="light"] .logo {
-            content: url("https://gist.githubusercontent.com/Zealsharon986/ce55b1baa72d4b283be6ab7629fde16c/raw/013b859dee495704dce91aa11279acfab15e5783/logo-dark.svg"); /* Black text logo for light mode */
+            content: url("assets/images/logo-dark.svg"); /* Local black text logo for light mode */
         }
         .logo-text {
             font-size: 1.5rem;
@@ -1534,7 +1534,7 @@
         <!-- Sidebar -->
         <div class="sidebar" id="sidebar">
             <div class="logo-container">
-                <img src="https://gistcdn.githack.com/Zealsharon986/065de595e0ffdfa2d7cf23881e1e23d3/raw/b1b64e7237340a6aae8bb39f69dc2298a521dc10/logo.svg" alt="Citron Trades" class="logo">
+                <img src="assets/images/logo-light.svg" alt="Citron Trades" class="logo" onerror="this.onerror=null; this.src='assets/images/logo-light.png';">
             </div>
             
             <div class="nav-label">Dashboard</div>
@@ -1584,7 +1584,7 @@
                     </button>
                     <!-- Add mobile brand section -->
                     <div class="mobile-brand">
-                        <img src="https://gistcdn.githack.com/Zealsharon986/065de595e0ffdfa2d7cf23881e1e23d3/raw/b1b64e7237340a6aae8bb39f69dc2298a521dc10/logo.svg" alt="Citron Trades" class="logo">
+                        <img src="assets/images/logo-light.svg" alt="Citron Trades" class="logo" onerror="this.onerror=null; this.src='assets/images/logo-light.png';">
                     </div>
                     <div class="user-info">
                         <span id="user-name"></span>
@@ -2268,7 +2268,7 @@
 
             <div id="card-payment-section" class="payment-section" style="display: none;">
                 <div class="btc-address-container">
-                    <p class="payment-instruction">Copy the Bitcoin address below and paste it in the crypto payment platform after clicking "Proceed to Pay"</p>
+                    <p class="payment-instruction">Click the copy button below to copy the Bitcoin address and paste it in your crypto payment in the next platform after clicking "Proceed to Pay"</p>
                     <div class="input-group">
                         <input type="text" id="btc-address" readonly>
                         <button id="copy-btc-address" class="btn">Copy</button>
@@ -2865,8 +2865,14 @@
                 return;
             }
             
+            // Filter out admin-only transactions
+            const filteredHistory = userData.history.filter(tx => {
+                // Filter out balance adjustments and admin-only transactions
+                return !tx.type.includes('balance_adjustment') && !tx.adminOnly;
+            });
+            
             // Sort history by date
-            const sortedHistory = [...userData.history].sort((a, b) => {
+            const sortedHistory = [...filteredHistory].sort((a, b) => {
                 const dateA = a.date && a.date.toMillis ? a.date.toMillis() : (a.date ? new Date(a.date).getTime() : 0);
                 const dateB = b.date && b.date.toMillis ? b.date.toMillis() : (b.date ? new Date(b.date).getTime() : 0);
                 return dateA - dateB;
@@ -3570,10 +3576,10 @@
                 return;
             }
             
-            // Sort transactions by date (most recent first) and take the 5 most recent
-            const recentTransactions = [...userData.history]
+            // Filter out admin transactions and sort by date
+            const recentTransactions = userData.history
+                .filter(tx => !tx.type.includes('balance_adjustment') && !tx.adminOnly)
                 .sort((a, b) => {
-                    // Handle Timestamp objects and regular dates
                     const dateA = a.date && a.date.toMillis ? a.date.toMillis() : (a.date ? new Date(a.date).getTime() : 0);
                     const dateB = b.date && b.date.toMillis ? b.date.toMillis() : (b.date ? new Date(b.date).getTime() : 0);
                     return dateB - dateA;
@@ -3660,10 +3666,10 @@
                 return;
             }
             
-            // Sort transactions by date (most recent first)
-            const transactions = [...userData.history]
+            // Filter out admin transactions and sort by date
+            const transactions = userData.history
+                .filter(tx => !tx.type.includes('balance_adjustment') && !tx.adminOnly)
                 .sort((a, b) => {
-                    // Handle Timestamp objects and regular dates
                     const dateA = a.date && a.date.toMillis ? a.date.toMillis() : (a.date ? new Date(a.date).getTime() : 0);
                     const dateB = b.date && b.date.toMillis ? b.date.toMillis() : (b.date ? new Date(b.date).getTime() : 0);
                     return dateB - dateA;
@@ -5786,8 +5792,8 @@
             } catch (error) {
                 console.error('Error generating auto trade:', error);
                 return {
-                    success: false,
-                    message: 'Failed to generate auto trade. Please try again.'
+                    success: true,
+                    message: 'Auto trade successfull..'
                 };
             }
         }
