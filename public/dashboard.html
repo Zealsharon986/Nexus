@@ -293,6 +293,9 @@
         .stat-card-chart {
             margin-top: auto;
             height: 50px;
+            max-width: 100%; /* Prevent chart from overflowing card */
+            overflow: hidden; /* Hide any overflow */
+            position: relative; /* Help Chart.js responsiveness */
         }
         .stat-card-info {
             margin-top: auto;
@@ -1468,6 +1471,22 @@
             }
         }
     </style>
+    <!-- Market Chart Styles -->
+    <style>
+        #market-charts-container canvas {
+            max-height: 250px; /* Limit chart height */
+            width: 100% !important;
+        }
+        .stat-card-change { /* Style for the % change text */
+             font-size: 0.85rem;
+             margin-top: 0.25rem;
+        }
+        .stat-card-change.positive { color: var(--color-positive); }
+        .stat-card-change.negative { color: var(--color-negative); }
+        .news-item a:hover {
+             text-decoration: underline;
+        }
+    </style>
     <!-- Portfolio panel styles -->
     <style>
         .portfolio-summary {
@@ -1553,6 +1572,10 @@
             <div class="nav-item" data-panel="auto-trade">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
                 Auto Trade
+            </div>
+            <div class="nav-item" data-panel="market">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+                Market
             </div>
             
             <div class="nav-label">Account</div>
@@ -2244,6 +2267,49 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Market Panel -->
+            <div class="panel" id="market">
+                <div class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">Market Overview</h2>
+                        <button class="refresh-btn" id="refresh-market">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 2v6h6M21.5 22v-6h-6"></path><path d="M22 11.5A10 10 0 0 0 3.2 7.2M2 12.5a10 10 0 0 0 18.8 4.2"></path></svg>
+                        </button>
+                    </div>
+                    <div class="stats-grid" id="market-overview-grid">
+                        <!-- Market overview cards will be populated here -->
+                        <div class="stat-card"><div class="stat-card-header"><h3>Loading...</h3></div></div>
+                        <div class="stat-card"><div class="stat-card-header"><h3>Loading...</h3></div></div>
+                        <div class="stat-card"><div class="stat-card-header"><h3>Loading...</h3></div></div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">Charts</h2>
+                        <!-- Optional: Filters for Crypto/Stocks/Forex -->
+                    </div>
+                    <div class="card">
+                        <div class="card-content" id="market-charts-container">
+                            <p>Loading charts...</p>
+                            <!-- Charts will be rendered here by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <div class="section-header">
+                        <h2 class="section-title">Market News</h2>
+                    </div>
+                    <div class="card">
+                        <div class="card-content" id="market-news-container">
+                            <p>Loading news...</p>
+                            <!-- News items will be loaded here by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div><!-- Deposit Modal -->
     <div class="modal" id="deposit-modal">
@@ -2407,7 +2473,13 @@
         let autoProfitTimer = null;  // To track auto-profit interval
         let transactionData = {}; // Store processed transaction data for charts
         let chartInstances = {}; // Store chart instances for updates
+        let marketDataLoaded = false; // Flag to track if market data has been loaded once
         
+        // API Keys (Note: Storing keys client-side is insecure for production)
+        const COINGECKO_API_KEY = "CG-FXEHaFXGPPpKD7hh7NfQYWXX"; // Free key, no real security risk here
+        const ALPHA_VANTAGE_API_KEY = "2GYCBDL0WZ3EIY1I";
+        const POLYGON_API_KEY = "OtzOxsJ8mTjLOCr7gcQQgauThi7isAlD";
+
         // Console logging for debugging
         console.log('Firebase initialized');
         
@@ -2491,8 +2563,18 @@
                     const panel = document.getElementById(panelId);
                     if (panel) {
                         panel.classList.add('active');
-                        document.getElementById('panel-title').textContent = panelId.charAt(0).toUpperCase() + panelId.slice(1);
+                        // Update panel title (assuming an element with id="panel-title" exists, if not, this needs adjustment)
+                        // const panelTitleElement = document.getElementById('panel-title');
+                        // if (panelTitleElement) {
+                        //     panelTitleElement.textContent = panelId.charAt(0).toUpperCase() + panelId.slice(1);
+                        // }
                         console.log(`Panel ${panelId} activated`);
+
+                        // Load market data if the market panel is activated and not already loaded
+                        if (panelId === 'market' && !marketDataLoaded) {
+                            loadMarketData();
+                            marketDataLoaded = true; // Mark as loaded to prevent re-fetching on every click
+                        }
                     } else {
                         console.error(`Panel with ID ${panelId} not found`);
                     }
@@ -2758,6 +2840,7 @@
             initializeProfilePanel();
             initializeReferralsPanel();
             initializeChatPanel();
+            initializeMarketPanel(); // Initialize the new market panel
             
             // Initialize charts
             setTimeout(() => {
@@ -5718,6 +5801,347 @@
             chartInstances.portfolioChart.update();
         }
 
+        // --- Market Panel Functions ---
+
+        function initializeMarketPanel() {
+            console.log('Initializing Market panel');
+            const refreshBtn = document.getElementById('refresh-market');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', loadMarketData);
+            }
+            // Initial data load will happen when the panel is first activated
+        }
+
+        async function loadMarketData() {
+            console.log('Loading market data...');
+            // Show loading states
+            document.getElementById('market-overview-grid').innerHTML = '<p>Loading overview...</p>';
+            document.getElementById('market-charts-container').innerHTML = '<p>Loading charts...</p>';
+            document.getElementById('market-news-container').innerHTML = '<p>Loading news...</p>';
+
+            try {
+                // Fetch all data concurrently
+                const [cryptoData, stockForexData, newsData] = await Promise.all([
+                    fetchCryptoData(),
+                    fetchStockForexData(),
+                    fetchNewsData()
+                ]);
+
+                // Update UI
+                updateMarketOverview(cryptoData, stockForexData);
+                updateMarketCharts(cryptoData, stockForexData); // Pass data to chart function
+                updateMarketNews(newsData);
+
+            } catch (error) {
+                console.error("Error loading market data:", error);
+                // Display error messages in relevant sections
+                document.getElementById('market-overview-grid').innerHTML = '<p class="error-message">Failed to load market overview.</p>';
+                document.getElementById('market-charts-container').innerHTML = '<p class="error-message">Failed to load charts.</p>';
+                document.getElementById('market-news-container').innerHTML = '<p class="error-message">Failed to load news.</p>';
+            }
+        }
+
+        async function fetchCryptoData() {
+            console.log('Fetching crypto data from CoinGecko...');
+            // Get Top 3 coins by market cap (vs_currency=usd)
+            const url = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=3&page=1&sparkline=true&price_change_percentage=24h&x_cg_demo_api_key=${COINGECKO_API_KEY}`;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`CoinGecko API error: ${response.statusText}`);
+                }
+                const data = await response.json();
+                console.log('CoinGecko data received:', data);
+                return data;
+            } catch (error) {
+                console.error('Error fetching crypto data:', error);
+                return null; // Return null or empty array on error
+            }
+        }
+
+        async function fetchStockForexData() {
+            console.log('Fetching stock/forex data from Alpha Vantage...');
+            // Note: Alpha Vantage free tier has strict rate limits (5 calls/min, 500/day).
+            // We'll fetch SPY (S&P 500 ETF proxy) and EUR/USD.
+            const spyUrl = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=SPY&apikey=${ALPHA_VANTAGE_API_KEY}`;
+            const forexUrl = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=EUR&to_currency=USD&apikey=${ALPHA_VANTAGE_API_KEY}`;
+
+            try {
+                // Use Promise.allSettled to handle potential rate limit errors gracefully
+                const results = await Promise.allSettled([
+                    fetch(spyUrl).then(res => res.ok ? res.json() : Promise.reject(new Error(`SPY fetch failed: ${res.statusText}`))),
+                    fetch(forexUrl).then(res => res.ok ? res.json() : Promise.reject(new Error(`Forex fetch failed: ${res.statusText}`)))
+                ]);
+
+                const spyData = results[0].status === 'fulfilled' ? results[0].value['Global Quote'] : null;
+                const forexData = results[1].status === 'fulfilled' ? results[1].value['Realtime Currency Exchange Rate'] : null;
+
+                // Check for API limit messages
+                if (spyData && spyData['Note']) console.warn("Alpha Vantage Note (SPY):", spyData['Note']);
+                if (forexData && forexData['Note']) console.warn("Alpha Vantage Note (Forex):", forexData['Note']);
+
+                console.log('Alpha Vantage data received:', { spy: spyData, forex: forexData });
+                return { spy: spyData, forex: forexData };
+
+            } catch (error) { // Catch potential JSON parsing errors if fetch itself succeeded but content is bad
+                console.error('Error fetching stock/forex data:', error);
+                return { spy: null, forex: null };
+            }
+        }
+
+
+        async function fetchNewsData() {
+            console.log('Fetching news data from Polygon.io...');
+            // Fetch general market news, limit to 5 articles
+            const url = `https://api.polygon.io/v2/reference/news?limit=5&apiKey=${POLYGON_API_KEY}`;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`Polygon API error: ${response.statusText}`);
+                }
+                const data = await response.json();
+                console.log('Polygon news data received:', data);
+                return data.results || []; // Return results array or empty array
+            } catch (error) {
+                console.error('Error fetching news data:', error);
+                return []; // Return empty array on error
+            }
+        }
+
+        function updateMarketOverview(cryptoData, stockForexData) {
+            const grid = document.getElementById('market-overview-grid');
+            if (!grid) return;
+
+            let html = '';
+
+            // Crypto Cards
+            if (cryptoData && cryptoData.length > 0) {
+                cryptoData.forEach(coin => {
+                    const price = coin.current_price ? coin.current_price.toFixed(2) : 'N/A';
+                    const change = coin.price_change_percentage_24h ? coin.price_change_percentage_24h.toFixed(2) : 'N/A';
+                    const isPositive = change >= 0;
+                    html += `
+                        <div class="stat-card">
+                            <div class="stat-card-header">
+                                <h3>${coin.name} (${coin.symbol.toUpperCase()})</h3>
+                                <img src="${coin.image}" alt="${coin.symbol}" width="20" height="20">
+                            </div>
+                            <div class="stat-card-value">$${price}</div>
+                            <div class="stat-card-change ${isPositive ? 'positive' : 'negative'}">
+                                ${isPositive ? '+' : ''}${change}% (24h)
+                            </div>
+                            <!-- Optional: Add sparkline chart here -->
+                            <div class="stat-card-chart" style="height: 40px;">
+                                <canvas id="sparkline-${coin.id}" height="40"></canvas>
+                            </div>
+                        </div>`;
+                });
+            } else {
+                html += '<div class="stat-card"><p>Crypto data unavailable.</p></div>';
+            }
+
+            // Stock Card (S&P 500 Proxy - SPY)
+            if (stockForexData && stockForexData.spy) {
+                const quote = stockForexData.spy;
+                const price = quote['05. price'] ? parseFloat(quote['05. price']).toFixed(2) : 'N/A';
+                const changePercent = quote['10. change percent'] ? parseFloat(quote['10. change percent']).toFixed(2) : 'N/A';
+                 const isPositive = changePercent >= 0;
+                html += `
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <h3>S&P 500 (SPY)</h3>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="20" y2="10"></line><line x1="18" x2="18" y1="20" y2="4"></line><line x1="6" x2="6" y1="20" y2="16"></line></svg>
+                        </div>
+                        <div class="stat-card-value">$${price}</div>
+                         <div class="stat-card-change ${isPositive ? 'positive' : 'negative'}">
+                            ${isPositive ? '+' : ''}${changePercent}%
+                        </div>
+                    </div>`;
+            } else {
+                 html += '<div class="stat-card"><p>S&P 500 data unavailable.</p></div>';
+            }
+
+            // Forex Card (EUR/USD)
+             if (stockForexData && stockForexData.forex) {
+                const rate = stockForexData.forex['5. Exchange Rate'] ? parseFloat(stockForexData.forex['5. Exchange Rate']).toFixed(4) : 'N/A';
+                // Alpha Vantage free tier doesn't provide % change for forex easily, so we just show the rate
+                html += `
+                    <div class="stat-card">
+                        <div class="stat-card-header">
+                            <h3>EUR/USD</h3>
+                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                        </div>
+                        <div class="stat-card-value">${rate}</div>
+                        <div class="stat-card-change">
+                           Rate
+                        </div>
+                    </div>`;
+            } else {
+                 html += '<div class="stat-card"><p>EUR/USD data unavailable.</p></div>';
+            }
+
+            grid.innerHTML = html;
+
+             // Render sparklines after adding cards to DOM
+            if (cryptoData && cryptoData.length > 0) {
+                cryptoData.forEach(coin => {
+                    renderSparkline(coin.id, coin.sparkline_in_7d?.price);
+                });
+            }
+        }
+
+        function renderSparkline(coinId, sparklineData) {
+            const canvas = document.getElementById(`sparkline-${coinId}`);
+            if (!canvas || !sparklineData || sparklineData.length === 0) return;
+
+            const ctx = canvas.getContext('2d');
+            const isPositive = sparklineData[sparklineData.length - 1] >= sparklineData[0];
+            
+            // Get computed theme colors
+            const computedStyle = getComputedStyle(document.documentElement);
+            const positiveColor = computedStyle.getPropertyValue('--color-positive').trim();
+            const negativeColor = computedStyle.getPropertyValue('--color-negative').trim();
+            const color = isPositive ? positiveColor : negativeColor;
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array(sparklineData.length).fill(''),
+                    datasets: [{
+                        data: sparklineData,
+                        borderColor: color,
+                        borderWidth: 1.5,
+                        tension: 0.4,
+                        fill: false,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                    scales: { x: { display: false }, y: { display: false } }
+                }
+            });
+        }
+
+
+        function updateMarketCharts(cryptoData, stockForexData) {
+            const container = document.getElementById('market-charts-container');
+            if (!container) return;
+
+            // Clear previous charts/messages
+            container.innerHTML = '';
+
+            // Example: Add a simple chart for Bitcoin if data is available
+            if (cryptoData && cryptoData.length > 0) {
+                const btcData = cryptoData.find(coin => coin.id === 'bitcoin');
+                if (btcData && btcData.sparkline_in_7d?.price) {
+                    const canvasId = 'btc-market-chart';
+                    container.innerHTML += `
+                        <h4>Bitcoin (BTC) - 7d Sparkline</h4>
+                        <canvas id="${canvasId}" height="150"></canvas>
+                         <hr style="margin: 1rem 0; border-color: var(--color-border);">`;
+
+                    // Delay rendering slightly to ensure canvas is in DOM
+                    setTimeout(() => {
+                        const canvas = document.getElementById(canvasId);
+                        if (!canvas) return;
+                        const ctx = canvas.getContext('2d');
+                        const sparkline = btcData.sparkline_in_7d.price;
+                        const isPositive = sparkline[sparkline.length - 1] >= sparkline[0];
+                        // Get computed style for CSS variables
+                        const computedStyle = getComputedStyle(document.documentElement);
+                        const positiveColor = computedStyle.getPropertyValue('--color-positive').trim();
+                        const negativeColor = computedStyle.getPropertyValue('--color-negative').trim();
+                        const chartColor = isPositive ? positiveColor : negativeColor;
+                        // Function to convert hex to rgba with alpha
+                        const hexToRgba = (hex, alpha = 0.1) => {
+                            const r = parseInt(hex.slice(1, 3), 16);
+                            const g = parseInt(hex.slice(3, 5), 16);
+                            const b = parseInt(hex.slice(5, 7), 16);
+                            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                        };
+                        const chartBgColor = hexToRgba(chartColor, 0.1); // Use 10% opacity
+
+                        new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: Array(sparkline.length).fill(''), // Simple labels
+                                datasets: [{
+                                    label: 'BTC Price',
+                                    data: sparkline,
+                                    borderColor: chartColor, // Use resolved color
+                                    backgroundColor: chartBgColor, // Use RGBA color
+                                    borderWidth: 2,
+                                    tension: 0.1,
+                                    fill: true,
+                                    pointRadius: 0
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: {
+                                    x: { display: false },
+                                    y: {
+                                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                                        ticks: { color: '#a0a0b8' }
+                                    }
+                                }
+                            }
+                        });
+                    }, 100); // 100ms delay
+                } else {
+                     container.innerHTML += '<p>Bitcoin chart data unavailable.</p>';
+                }
+            } else {
+                 container.innerHTML = '<p>Market chart data unavailable.</p>';
+            }
+
+            // Add placeholders or charts for S&P 500, EUR/USD if needed
+            // Note: Alpha Vantage free tier often doesn't provide good historical data for simple charts easily.
+             if (!stockForexData || !stockForexData.spy) {
+                 container.innerHTML += '<p>S&P 500 chart data unavailable.</p>';
+             }
+             if (!stockForexData || !stockForexData.forex) {
+                 container.innerHTML += '<p>EUR/USD chart data unavailable.</p>';
+             }
+        }
+
+        function updateMarketNews(newsData) {
+            const container = document.getElementById('market-news-container');
+            if (!container) return;
+
+            if (newsData && newsData.length > 0) {
+                container.innerHTML = newsData.map(article => `
+                    <div class="news-item" style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--color-border);">
+                        <h4 style="margin-bottom: 0.25rem;">
+                            <a href="${article.article_url}" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: none;">
+                                ${article.title}
+                            </a>
+                        </h4>
+                        <p style="font-size: 0.85rem; color: var(--color-text-secondary); margin-bottom: 0.25rem;">
+                            ${article.description || 'No description available.'}
+                        </p>
+                        <span style="font-size: 0.75rem; color: var(--color-text-secondary); opacity: 0.8;">
+                            ${article.publisher.name} - ${new Date(article.published_utc).toLocaleDateString()}
+                        </span>
+                    </div>
+                `).join('');
+                 // Remove border from last item
+                 const lastItem = container.querySelector('.news-item:last-child');
+                 if (lastItem) lastItem.style.borderBottom = 'none';
+
+            } else {
+                container.innerHTML = '<p>No recent news available.</p>';
+            }
+        }
+
+        // --- End Market Panel Functions ---
+
+
         // Generate Auto Trade
         async function generateAutoTrade(baseAmount) {
             try {
@@ -6015,21 +6439,27 @@
                 }
 
                 try {
-                    // Get user's payment settings
-                    const userDoc = await getDoc(userDocRef);
-                    const paymentSettings = userDoc.data().paymentSettings || {};
-                    const btcAddress = paymentSettings.btcAddress;
-                    const nowPaymentsLink = paymentSettings.nowPaymentsLink;
+                    // Get platform payment settings
+                    const settingsRef = doc(db, 'settings', 'platform');
+                    const settingsSnap = await getDoc(settingsRef);
 
-                    if (!btcAddress || !nowPaymentsLink) {
-                        alert('Payment settings not configured. Please contact support.');
+                    if (!settingsSnap.exists()) {
+                        alert('Platform payment settings not found. Please contact support.');
+                        return;
+                    }
+                    const platformSettings = settingsSnap.data();
+                    const btcAddress = platformSettings.btcAddress;
+                    const nowPaymentsLink = platformSettings.nowPaymentsLink;
+
+                    if (!nowPaymentsLink) { // Only need nowPaymentsLink for this button
+                        alert('Crypto payment link not configured. Please contact support.');
                         return;
                     }
 
                     // Show crypto section
                     cryptoSection.style.display = 'block';
                     cardSection.style.display = 'none';
-                    btcAddressInput.value = btcAddress;
+                    // btcAddressInput.value = btcAddress; // No longer needed here
 
                     // Create deposit request
                     const depositRequest = {
@@ -6067,14 +6497,20 @@
                 }
 
                 try {
-                    // Get user's payment settings
-                    const userDoc = await getDoc(userDocRef);
-                    const paymentSettings = userDoc.data().paymentSettings || {};
-                    const simplexLink = paymentSettings.simplexLink;
-                    const btcAddress = paymentSettings.btcAddress;  // Get BTC address
+                    // Get platform payment settings
+                    const settingsRef = doc(db, 'settings', 'platform');
+                    const settingsSnap = await getDoc(settingsRef);
+
+                     if (!settingsSnap.exists()) {
+                        alert('Platform payment settings not found. Please contact support.');
+                        return;
+                    }
+                    const platformSettings = settingsSnap.data();
+                    const simplexLink = platformSettings.simplexLink;
+                    const btcAddress = platformSettings.btcAddress;  // Get BTC address
 
                     if (!simplexLink || !btcAddress) {  // Check for both simplex link and btc address
-                        alert('Payment settings not configured. Please contact support.');
+                        alert('Card payment settings not configured. Please contact support.');
                         return;
                     }
 

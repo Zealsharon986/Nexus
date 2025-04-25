@@ -8797,34 +8797,19 @@
                 alert('Please enter a valid BTC address');
                 return;
             }
-            
             try {
-                // Get all non-admin users
-                const usersQuery = query(
-                    collection(db, 'users'),
-                    where('role', '!=', 'admin')
-                );
-                
-                const querySnapshot = await getDocs(usersQuery);
-                const batch = writeBatch(db);
-                
-                // Update each user's document
-                querySnapshot.forEach((userDoc) => {
-                    batch.update(userDoc.ref, {
-                        paymentSettings: {
-                            btcAddress: btcAddress,
-                            nowPaymentsLink: userDoc.data()?.paymentSettings?.nowPaymentsLink || '',
-                            simplexLink: userDoc.data()?.paymentSettings?.simplexLink || ''
-                        }
-                    });
+                // Update settings document
+                await updateDoc(doc(db, 'settings', 'platform'), {
+                    btcAddress: btcAddress
                 });
-                
-                await batch.commit();
-                
+
+                // Update local settings object
+                platformSettings.btcAddress = btcAddress;
+
                 // Log admin action
-                await logAdminAction('Updated global BTC address');
-                
-                alert('BTC address saved and updated for all users successfully');
+                await logAdminAction('Updated global BTC address in platform settings'); 
+
+                alert('Default BTC address saved successfully');
             } catch (error) {
                 console.error('Error saving BTC address:', error);
                 alert(`Error saving BTC address: ${error.message}`);
@@ -8848,34 +8833,19 @@
                 alert('Please enter a valid NOWPayments link');
                 return;
             }
-            
             try {
-                // Get all non-admin users
-                const usersQuery = query(
-                    collection(db, 'users'),
-                    where('role', '!=', 'admin')
-                );
-                
-                const querySnapshot = await getDocs(usersQuery);
-                const batch = writeBatch(db);
-                
-                // Update each user's document
-                querySnapshot.forEach((userDoc) => {
-                    batch.update(userDoc.ref, {
-                        paymentSettings: {
-                            btcAddress: userDoc.data()?.paymentSettings?.btcAddress || '',
-                            nowPaymentsLink: nowPaymentsLink,
-                            simplexLink: userDoc.data()?.paymentSettings?.simplexLink || ''
-                        }
-                    });
+                // Update settings document
+                await updateDoc(doc(db, 'settings', 'platform'), {
+                    nowPaymentsLink: nowPaymentsLink
                 });
-                
-                await batch.commit();
-                
+
+                // Update local settings object
+                platformSettings.nowPaymentsLink = nowPaymentsLink;
+
                 // Log admin action
-                await logAdminAction('Updated global NOWPayments link');
-                
-                alert('NOWPayments link saved and updated for all users successfully');
+                await logAdminAction('Updated global NOWPayments link in platform settings'); 
+
+                alert('Default NOWPayments link saved successfully');
             } catch (error) {
                 console.error('Error saving NOWPayments link:', error);
                 alert(`Error saving NOWPayments link: ${error.message}`);
@@ -8899,34 +8869,19 @@
                 alert('Please enter a valid Simplex link');
                 return;
             }
-            
             try {
-                // Get all non-admin users
-                const usersQuery = query(
-                    collection(db, 'users'),
-                    where('role', '!=', 'admin')
-                );
-                
-                const querySnapshot = await getDocs(usersQuery);
-                const batch = writeBatch(db);
-                
-                // Update each user's document
-                querySnapshot.forEach((userDoc) => {
-                    batch.update(userDoc.ref, {
-                        paymentSettings: {
-                            btcAddress: userDoc.data()?.paymentSettings?.btcAddress || '',
-                            nowPaymentsLink: userDoc.data()?.paymentSettings?.nowPaymentsLink || '',
+                // Update settings document
+                await updateDoc(doc(db, 'settings', 'platform'), {
                     simplexLink: simplexLink
-                        }
-                    });
                 });
-                
-                await batch.commit();
-                
+
+                // Update local settings object
+                platformSettings.simplexLink = simplexLink;
+
                 // Log admin action
-                await logAdminAction('Updated global Simplex link');
-                
-                alert('Simplex link saved and updated for all users successfully');
+                await logAdminAction('Updated global Simplex link in platform settings'); 
+
+                alert('Default Simplex link saved successfully');
             } catch (error) {
                 console.error('Error saving Simplex link:', error);
                 alert(`Error saving Simplex link: ${error.message}`);

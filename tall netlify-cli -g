@@ -1,0 +1,11 @@
+[33mcommit 03770321aebb9ac819ad1eb00859c3650f8d925b[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m
+Author: Zealsharon986 <sharonpeter986@gmail.com>
+Date:   Thu Mar 27 21:18:57 2025 +0100
+
+    Add JivoChat support widget to index.html
+
+[33mcommit 271de25fde0045f503e222a423e18ac988367e84[m
+Author: Zealsharon986 <sharonpeter986@gmail.com>
+Date:   Thu Mar 27 17:35:54 2025 +0100
+
+    Update site files, add new logo assets, and reorganize directory structure

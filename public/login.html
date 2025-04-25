@@ -231,12 +231,17 @@
 
         // Login Functionality
         document.getElementById('login-btn').addEventListener('click', async () => {
+            const loginButton = document.getElementById('login-btn');
             const email = document.getElementById('login-email').value;
             const password = document.getElementById('login-password').value;
             if (!email || !password) {
                 alert('Please enter email and password');
                 return;
             }
+
+            loginButton.disabled = true;
+            loginButton.textContent = 'Logging in...'; // Optional: Change text
+
             try {
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 const user = userCredential.user;
@@ -266,6 +271,8 @@
                 }
             } catch (error) {
                 alert('Login failed: ' + error.message);
+                loginButton.disabled = false; // Re-enable button on error
+                loginButton.textContent = 'Login'; // Optional: Restore text
             }
         });
 
@@ -286,6 +293,10 @@
                 return;
             }
 
+            const signupButton = document.getElementById('signup-btn');
+            signupButton.disabled = true;
+            signupButton.textContent = 'Signing up...'; // Optional: Change text
+
             try {
                 console.log('Creating user in Authentication');
                 const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -294,8 +305,27 @@
 
                 const userRef = doc(db, 'users', user.uid);
                 console.log('Checking if user document exists');
-                const userDoc = await getDoc(userRef);
-                if (!userDoc.exists()) {
+                const userDocSnap = await getDoc(userRef); // Renamed to avoid conflict
+
+                // --- START: Fetch default settings ---
+                let fetchedSettings = {}; // Use a different variable name initially
+                try {
+                    const settingsRef = doc(db, 'settings', 'platform');
+                    const settingsSnap = await getDoc(settingsRef); // Ensure this await completes
+                    if (settingsSnap.exists()) {
+                        fetchedSettings = settingsSnap.data(); // Assign fetched data
+                        console.log('Fetched default settings:', fetchedSettings);
+                    } else {
+                        console.warn('Default settings document (/settings/platform) not found!');
+                    }
+                } catch (settingsError) {
+                    console.error('Error fetching default settings:', settingsError);
+                    // Proceed with empty defaults if fetch fails
+                }
+                // --- END: Fetch default settings ---
+
+                // Now that settings are fetched (or fetch failed), proceed to create the doc
+                if (!userDocSnap.exists()) { // Use the snapshot variable from earlier check
                     console.log('Creating Firestore document');
                     await setDoc(userRef, {
                         name: name,
@@ -317,12 +347,15 @@
                         tradeHistory: [],
                         history: [],
                         paymentSettings: {
-                            btcAddress: '',
-                            nowPaymentsLink: '',
-                            simplexLink: ''
-                        }
+                            // Use the fetched settings variable directly
+                            btcAddress: fetchedSettings.btcAddress || '',
+                            nowPaymentsLink: fetchedSettings.nowPaymentsLink || '',
+                            simplexLink: fetchedSettings.simplexLink || ''
+                        },
+                        adminSetAmount: fetchedSettings.defaultProfitAmount || 0,
+                        adminSetInterval: fetchedSettings.defaultProfitInterval || 30
                     });
-                    console.log('Firestore document created');
+                    console.log('Firestore document created with defaults');
                 } else {
                     console.log('User document already exists');
                 }
@@ -338,6 +371,8 @@
             } catch (error) {
                 console.error('Signup error:', error.code, error.message);
                 alert('Signup failed: ' + error.message);
+                signupButton.disabled = false; // Re-enable button on error
+                signupButton.textContent = 'Sign Up'; // Optional: Restore text
             }
         });
 
